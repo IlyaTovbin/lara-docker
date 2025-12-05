@@ -12,68 +12,21 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      db:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: laravel
-          MYSQL_USER: laravel
-          MYSQL_PASSWORD: laravel
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=3
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Setup PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: 8.2
-        extensions: mbstring, bcmath, pdo_mysql, xml
+    - name: Build Docker container
+      run: docker build -t laravel-app .
 
-    - name: Install Composer dependencies
-      run: composer install --prefer-dist --no-progress --no-interaction
+    - name: Run migrations in Docker
+      run: docker run --rm laravel-app php artisan migrate --force
 
-    - name: Copy .env
-      run: cp .env.example .env
+    - name: Prepare storage in Docker
+      run: docker run --rm laravel-app bash -c "php artisan config:clear && php artisan cache:clear && php artisan route:clear && php artisan view:clear && chmod -R 777 storage bootstrap/cache"
 
-    - name: Update .env for CI
-      run: |
-        sed -i "s/DB_HOST=.*/DB_HOST=db/" .env
-        sed -i "s/DB_DATABASE=.*/DB_DATABASE=laravel/" .env
-        sed -i "s/DB_USERNAME=.*/DB_USERNAME=laravel/" .env
-        sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=laravel/" .env
-
-    - name: Generate app key
-      run: php artisan key:generate
-
-    - name: Wait for MySQL
-      run: |
-        until mysqladmin ping -h db -u laravel -plaravel --silent; do
-          echo "Waiting for database..."
-          sleep 3
-        done
-
-    - name: Run migrations
-      run: php artisan migrate --force
-
-    - name: Prepare storage
-      run: |
-        php artisan config:clear
-        php artisan cache:clear
-        php artisan route:clear
-        php artisan view:clear
-        chmod -R 777 storage bootstrap/cache
-
-    - name: Run tests
-      run: vendor/bin/pest
+    - name: Run tests in Docker
+      run: docker run --rm laravel-app ./vendor/bin/pest
 
   deploy:
     runs-on: ubuntu-latest
