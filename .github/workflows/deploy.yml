@@ -19,15 +19,11 @@ jobs:
     - name: Build Docker container
       run: docker build -t laravel-app .
 
-    - name: Run migrations in Docker
-      run: docker run --rm -v ${{ github.workspace }}:/var/www/html laravel-app php artisan migrate --force
+    - name: Run migrations
+      run: docker run --rm laravel-app php artisan migrate --force
 
-    - name: Prepare storage in Docker
-      run: docker run --rm -v ${{ github.workspace }}:/var/www/html laravel-app bash -c "php artisan config:clear && php artisan cache:clear && php artisan route:clear && php artisan view:clear && chmod -R 777 storage bootstrap/cache"
-
-    - name: Run tests in Docker
-      run: docker run --rm -v ${{ github.workspace }}:/var/www/html laravel-app ./vendor/bin/pest
-
+    - name: Run tests
+      run: docker run --rm laravel-app ./vendor/bin/pest
 
   deploy:
     runs-on: ubuntu-latest
