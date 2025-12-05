@@ -39,7 +39,7 @@ jobs:
         extensions: mbstring, bcmath, pdo_mysql, xml
 
     - name: Install Composer dependencies
-      run: composer install --prefer-dist --no-progress --no-suggest
+      run: composer install --prefer-dist --no-progress
 
     - name: Copy .env
       run: cp .env.example .env
