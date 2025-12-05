@@ -1,3 +1,13 @@
+name: Laravel CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -19,37 +29,69 @@ jobs:
           --health-retries=3
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-    - uses: shivammathur/setup-php@v2
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
       with:
         php-version: 8.2
         extensions: mbstring, bcmath, pdo_mysql, xml
 
-    - run: composer install --prefer-dist --no-progress --no-interaction
+    - name: Install Composer dependencies
+      run: composer install --prefer-dist --no-progress --no-interaction
 
-    - run: cp .env.example .env
+    - name: Copy .env
+      run: cp .env.example .env
 
-    - run: sed -i "s/DB_HOST=.*/DB_HOST=db/" .env
-    - run: sed -i "s/DB_DATABASE=.*/DB_DATABASE=laravel/" .env
-    - run: sed -i "s/DB_USERNAME=.*/DB_USERNAME=laravel/" .env
-    - run: sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=laravel/" .env
+    - name: Update .env for CI
+      run: |
+        sed -i "s/DB_HOST=.*/DB_HOST=db/" .env
+        sed -i "s/DB_DATABASE=.*/DB_DATABASE=laravel/" .env
+        sed -i "s/DB_USERNAME=.*/DB_USERNAME=laravel/" .env
+        sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=laravel/" .env
 
-    - run: php artisan key:generate
+    - name: Generate app key
+      run: php artisan key:generate
 
-    - run: |
+    - name: Wait for MySQL
+      run: |
         until mysqladmin ping -h db -u laravel -plaravel --silent; do
           echo "Waiting for database..."
           sleep 3
         done
 
-    - run: php artisan migrate --force
+    - name: Run migrations
+      run: php artisan migrate --force
 
-    - run: |
+    - name: Prepare storage
+      run: |
         php artisan config:clear
         php artisan cache:clear
         php artisan route:clear
         php artisan view:clear
         chmod -R 777 storage bootstrap/cache
 
-    - run: vendor/bin/pest
+    - name: Run tests
+      run: vendor/bin/pest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Deploy to droplet via SSH
+      uses: appleboy/ssh-action@v0.1.7
+      with:
+        host: ${{ secrets.SERVER_IP }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        port: 22
+        script: |
+          cd /var/www/your-app
+          git pull origin main
+          docker-compose down
+          docker-compose up -d --build
